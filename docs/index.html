@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CanDO · WACV 2027</title>
+<meta name="description" content="CanDO recovers frozen, score-only point cloud models from rotation-induced distribution shifts using only forward queries, by searching input rotations with CMA-ES to maximize the model's own confidence.">
+<meta property="og:title" content="CanDO: Recovering Black-Box Point Cloud Models from Pose Shifts via Derivative-Free Optimization">
+<meta property="og:description" content="Test-time canonicalization of frozen point cloud models from forward queries alone. WACV 2027.">
+<meta property="og:image" content="static/images/teaser.gif">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%231f9d55'/><circle cx='11' cy='13' r='2.4' fill='white'/><circle cx='20' cy='10' r='2' fill='white'/><circle cx='21' cy='20' r='2.6' fill='white'/><circle cx='12' cy='22' r='1.8' fill='white'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+:root {
+  --bg: #fbfbf9; --surface: #ffffff; --surface-2: #f2f3ef; --text: #16181a; --muted: #5b6168; --faint: #9aa0a6;
+  --line: #e3e5e0; --accent: #1f9d55; --accent-soft: #e3f4ea; --accent-ink: #13703b; --warn: #c0392b; --warn-soft: #fbe9e6;
+  --oracle: #a7d7b8; --corrupt: #b9bdc2;
+  --code-bg: #f4f5f2; --shadow: 0 1px 2px rgba(20,24,28,.05), 0 8px 24px rgba(20,24,28,.06);
+  --canvas-bg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1112; --surface: #171a1c; --surface-2: #1f2326; --text: #e8eaec; --muted: #9aa1a8; --faint: #6b7278;
+    --line: #2a2f32; --accent: #3cc47a; --accent-soft: #163323; --accent-ink: #7ee0a8; --warn: #f08a76; --warn-soft: #3a1f1a;
+    --oracle: #2f6b48; --corrupt: #4b5157;
+    --code-bg: #14171a; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    --canvas-bg: #171a1c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1112; --surface: #171a1c; --surface-2: #1f2326; --text: #e8eaec; --muted: #9aa1a8; --faint: #6b7278;
+  --line: #2a2f32; --accent: #3cc47a; --accent-soft: #163323; --accent-ink: #7ee0a8; --warn: #f08a76; --warn-soft: #3a1f1a;
+  --oracle: #2f6b48; --corrupt: #4b5157;
+  --code-bg: #14171a; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  --canvas-bg: #171a1c;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.65 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent-ink); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+.narrow { max-width: 760px; margin: 0 auto; }
+section { padding: 60px 0; border-top: 1px solid var(--line); }
+h2 { font-size: 1.65rem; letter-spacing: -.02em; margin: 0 0 6px; line-height: 1.25; }
+.kicker { font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.lead { color: var(--muted); margin: 0 0 26px; max-width: 820px; }
+
+/* hero */
+header.wrap { padding: 72px 16px 44px; text-align: center; }
+.venue { display: inline-block; font-size: .8rem; font-weight: 600; letter-spacing: .06em; color: var(--accent-ink);
+  background: var(--accent-soft); border-radius: 999px; padding: 4px 12px; margin-bottom: 18px; }
+h1 { font-size: clamp(2.8rem, 7vw, 4.4rem); line-height: 1; letter-spacing: -.04em; margin: 0 0 14px; font-weight: 800; color: var(--accent); }
+.subtitle { font-size: clamp(1.1rem, 2.6vw, 1.45rem); line-height: 1.35; font-weight: 600; letter-spacing: -.01em; max-width: 820px; margin: 0 auto 20px; }
+.authors { font-size: 1.05rem; margin: 0; }
+.affil { color: var(--muted); margin: 2px 0 24px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-weight: 600; font-size: .92rem;
+  background: var(--text); color: var(--bg); border: 1px solid var(--text); transition: transform .12s ease; }
+.btn:hover { text-decoration: none; transform: translateY(-1px); }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+.btn.disabled { opacity: .45; pointer-events: none; }
+.btn svg { width: 16px; height: 16px; }
+.tldr { max-width: 780px; margin: 34px auto 0; padding: 16px 20px; border-radius: 14px; background: var(--surface);
+  box-shadow: var(--shadow); text-align: left; font-size: 1.02rem; }
+.tldr b { color: var(--accent-ink); }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+.pill { font-size: .84rem; font-weight: 600; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.pill span { color: var(--accent); margin-right: 4px; }
+
+/* shared viewer chrome */
+.card { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 18px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--text); padding: 6px 13px; border-radius: 999px;
+  font: inherit; font-size: .88rem; font-weight: 500; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.panel { position: relative; background: var(--canvas-bg); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.panel canvas { display: block; width: 100%; aspect-ratio: 1 / 1; cursor: grab; touch-action: none; }
+.panel canvas:active { cursor: grabbing; }
+.ptitle { position: absolute; left: 12px; top: 10px; right: 12px; font-size: .84rem; font-weight: 600; pointer-events: none; }
+.ptitle small { display: block; font-weight: 500; color: var(--muted); }
+.score { position: absolute; right: 12px; bottom: 10px; font-size: .82rem; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  background: var(--surface-2); pointer-events: none; font-variant-numeric: tabular-nums; }
+.score.good { background: var(--accent-soft); color: var(--accent-ink); }
+.score.bad { background: var(--warn-soft); color: var(--warn); }
+.legend { position: absolute; left: 12px; bottom: 10px; display: flex; flex-direction: column; gap: 2px; font-size: .74rem; color: var(--muted); pointer-events: none; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.vfoot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; font-size: .86rem; color: var(--muted); }
+.vfoot b { color: var(--text); font-variant-numeric: tabular-nums; }
+.tbtn { font: inherit; font-size: .84rem; border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 8px; padding: 4px 11px; cursor: pointer; }
+.tbtn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.cap { color: var(--muted); font-size: .88rem; margin: 10px 2px 0; }
+.panels3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.split { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 12px; align-items: stretch; }
+.split2 { display: grid; grid-template-columns: 1fr 1.5fr; gap: 12px; align-items: stretch; }
+.chartbox { background: var(--canvas-bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 6px; display: flex; flex-direction: column; gap: 4px; }
+.chartbox h4 { margin: 0; font-size: .84rem; font-weight: 600; }
+.chartbox h4 small { font-weight: 500; color: var(--muted); }
+.chartbox svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chartbox svg text { font: 11px Inter, sans-serif; fill: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.controls input { flex: 1; }
+.stat { font-variant-numeric: tabular-nums; }
+
+/* method */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; counter-reset: s; }
+.step { background: var(--surface); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); position: relative; }
+.step::before { counter-increment: s; content: counter(s); position: absolute; top: 18px; right: 18px; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-size: .8rem; font-weight: 700; background: var(--accent-soft); color: var(--accent-ink); }
+.step h3 { margin: 0 0 6px; font-size: 1.05rem; padding-right: 34px; }
+.step p { margin: 0; color: var(--muted); font-size: .93rem; }
+.eq { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px 20px; margin-top: 14px; overflow-x: auto; }
+.eq p { margin: 4px 0; }
+.eqrow { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 56px; }
+.eq .note { color: var(--muted); font-size: .9rem; }
+
+/* results */
+.bars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.bargroup { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 16px 16px 12px; }
+.bargroup h4 { margin: 0; font-size: .95rem; }
+.bargroup h4 small { display: block; color: var(--muted); font-weight: 500; font-size: .8rem; }
+.bgplot { display: flex; align-items: flex-end; gap: 8px; height: 150px; margin: 14px 0 8px; border-bottom: 1px solid var(--line); }
+.bgplot div { flex: 1; border-radius: 6px 6px 0 0; position: relative; transition: height .9s cubic-bezier(.2,.8,.2,1); height: 0; }
+.bgplot div span { position: absolute; top: -19px; left: 50%; transform: translateX(-50%); font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bgplot .bc { background: var(--corrupt); } .bgplot .bo { background: var(--accent); } .bgplot .br { background: var(--oracle); }
+.bgfoot { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); }
+.bgfoot b { color: var(--accent-ink); }
+.keyrow { display: flex; gap: 16px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); margin: 0 0 12px; }
+.keyrow i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.tablebox { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 10px 14px; text-align: center; white-space: nowrap; }
+th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+td:first-child, th:first-child { text-align: left; }
+tbody tr + tr td { border-top: 1px solid var(--line); }
+tr.group td { border-top: 2px solid var(--line); }
+tr.ours td { background: var(--accent-soft); font-weight: 700; }
+tr.oracle td { color: var(--muted); }
+.gapcell { display: flex; align-items: center; gap: 8px; min-width: 140px; }
+.bar { flex: 1; height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.gapcell b { min-width: 34px; text-align: right; }
+.mark { font-weight: 700; }
+.mark.y { color: var(--warn); }
+.mark.n { color: var(--accent); }
+h3.sub { margin: 34px 0 6px; font-size: 1.15rem; }
+
+/* conditions */
+.conds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cond { background: var(--surface); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+.cond .big { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; color: var(--accent); line-height: 1.1; }
+.cond .big small { font-size: .85rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.cond h3 { margin: 10px 0 6px; font-size: 1.05rem; }
+.cond p { margin: 0; color: var(--muted); font-size: .92rem; }
+
+/* code */
+pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; overflow-x: auto;
+  font: 13.5px/1.6 "JetBrains Mono", ui-monospace, monospace; }
+.c { color: var(--muted); }
+.k { color: var(--accent-ink); font-weight: 500; }
+.codehead { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; font-weight: 600; font-size: .92rem; }
+.copy { font: inherit; font-size: .8rem; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; padding: 3px 10px; cursor: pointer; }
+
+footer { padding: 36px 0 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: .86rem; text-align: center; }
+.theme { position: fixed; top: 14px; right: 14px; z-index: 5; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); cursor: pointer; display: grid; place-items: center; box-shadow: var(--shadow); }
+.theme svg { width: 17px; height: 17px; }
+
+@media (max-width: 900px) {
+  .split { grid-template-columns: 1fr 1fr; }
+  .split .chartbox { grid-column: 1 / -1; }
+  .bars { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 680px) {
+  .panels3, .split, .split2, .steps, .conds { grid-template-columns: 1fr; }
+  .bars { grid-template-columns: 1fr 1fr; }
+  header.wrap { padding-top: 60px; }
+  section { padding: 44px 0; }
+}
+</style>
+</head>
+<body>
+<button class="theme" id="theme" aria-label="Toggle color theme">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+</button>
+
+<header class="wrap">
+  <div class="venue">WACV 2027 · Algorithms Track</div>
+  <h1>CanDO</h1>
+  <p class="subtitle">Recovering Black-Box Point Cloud Models from Pose Shifts via Derivative-Free Optimization</p>
+  <p class="authors">Seonghwan Park &nbsp;·&nbsp; Min-Gyu Park</p>
+  <p class="affil">Korea Electronics Technology Institute (KETI)</p>
+  <div class="buttons">
+    <a class="btn" href="https://arxiv.org/pdf/2610.34850">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Paper</a>
+    <a class="btn" href="https://arxiv.org/abs/2610.34850">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-1.5z"/><path d="M8 7h6"/></svg>arXiv</a>
+    <a class="btn" href="https://github.com/shpark97/CanDO">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.3 4.3 18.3 4.6 18.3 4.6c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>Code</a>
+    <a class="btn ghost" href="#bibtex">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 8h10M7 12h10M7 16h6"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>BibTeX</a>
+  </div>
+  <p class="tldr"><b>TL;DR.</b> A frozen point cloud model behind a score-only API collapses when inputs arrive in poses it never saw in training.
+    CanDO searches over input rotations with CMA-ES and keeps the one the model is most confident about. It needs only forward queries, with no labels, gradients, weights, or auxiliary models.</p>
+  <div class="pills">
+    <span class="pill"><span>●</span>No gradients</span><span class="pill"><span>●</span>No labels</span>
+    <span class="pill"><span>●</span>No retraining</span><span class="pill"><span>●</span>~300 forward queries</span>
+  </div>
+</header>
+
+<section id="demo">
+  <div class="wrap">
+    <div class="kicker">Interactive results</div>
+    <h2>See the pose come back</h2>
+    <p class="lead">Each ShapeNetPart shape is rotated at random and segmented by a frozen PointNet++. Drag any panel to orbit; the three views stay in sync.</p>
+    <div class="card">
+      <div class="chips" id="chips" role="group" aria-label="Choose a shape"></div>
+      <div class="panels3">
+        <div class="panel"><canvas id="c0"></canvas><div class="ptitle">Misoriented input<small>prediction of the frozen model</small></div><div class="score bad" id="s0"></div></div>
+        <div class="panel"><canvas id="c1"></canvas><div class="ptitle">After CanDO<small>canonicalized from about 300 queries</small></div><div class="score good" id="s1"></div></div>
+        <div class="panel"><canvas id="c2"></canvas><div class="ptitle">Upright ground truth<small>reference parts</small></div><div class="score" id="s2">GT</div></div>
+      </div>
+      <div class="vfoot">
+        <span id="vinfo">Loading shapes…</span>
+        <span><button class="tbtn" id="spin" type="button">Pause rotation</button> <button class="tbtn" id="reset" type="button">Reset view</button></span>
+      </div>
+    </div>
+    <p class="cap">Colors denote predicted parts. Examples are shapes where recovery succeeds; averaged results over the full test sets follow below.</p>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <div class="kicker">Method</div>
+    <h2>Canonicalization by derivative-free search</h2>
+    <p class="lead">Rotations have only three degrees of freedom, so the search runs over an axis-angle vector rather than thousands of point coordinates or millions of weights.</p>
+    <div class="steps">
+      <div class="step"><h3>Propose rotations</h3><p>CMA-ES samples a population of axis-angle vectors \(\boldsymbol\theta\in\mathbb{R}^3\), mapped to rotations \(\mathbf R_{\boldsymbol\theta}\) by Rodrigues' formula.</p></div>
+      <div class="step"><h3>Query the black box</h3><p>Each rotated copy \(\mathbf P\mathbf R_{\boldsymbol\theta}^{\top}\) costs one forward query and is scored by the model's own confidence. No label or gradient is ever used.</p></div>
+      <div class="step"><h3>Adapt and select</h3><p>CMA-ES moves its mean, step size, and covariance toward the best-ranked rotations. After the budget, the most confident pose is kept.</p></div>
+    </div>
+    <div class="eq">
+      <div class="eqrow"><div>$$J(\boldsymbol\theta)=\frac1N\sum_{i=1}^{N}\max_c\big[g(\mathbf P\mathbf R_{\boldsymbol\theta}^{\top})\big]_{i,c}$$</div>
+      <div>$$\hat{\boldsymbol\theta}=\operatorname*{arg\,max}_{\boldsymbol\theta\in\{\mathbf 0\}\cup\Theta}\; J(\boldsymbol\theta)-\lambda\lVert\boldsymbol\theta\rVert$$</div></div>
+      <p class="note">The confidence surrogate averages per-point maximum probabilities (a single maximum for classification). The identity is always a candidate, and an optional prior \(\lambda\) keeps already-upright inputs untouched.</p>
+    </div>
+  </div>
+</section>
+
+<section id="search">
+  <div class="wrap">
+    <div class="kicker">CanDO in action</div>
+    <h2>Watch the search</h2>
+    <p class="lead">Every dot on the left is one forward query: a candidate rotation inside the ball of axis-angle vectors (radius π), colored by the model's confidence. Generation by generation, CMA-ES concentrates its samples while the shape on the right snaps to the best pose found so far.</p>
+    <div class="card">
+      <div class="chips" id="schips" role="group" aria-label="Choose a shape for the search"></div>
+      <div class="split">
+        <div class="panel"><canvas id="sball"></canvas><div class="ptitle">Rotation space<small>axis-angle ball, drag to orbit</small></div>
+          <div class="legend"><span><i style="background:var(--accent)"></i>current generation</span><span><i style="background:var(--faint)"></i>earlier queries</span><span><i style="background:transparent;border:2px solid var(--warn)"></i>true upright pose</span></div></div>
+        <div class="panel"><canvas id="sshape"></canvas><div class="ptitle">Best pose so far<small>parts predicted by the frozen model</small></div><div class="score" id="smiou"></div></div>
+        <div class="chartbox">
+          <h4>Confidence of each query <small>· label-free objective, by query index</small></h4>
+          <svg id="schart1" viewBox="0 0 360 150" role="img" aria-label="Confidence per query"></svg>
+          <h4>mIoU of the best pose <small>· ground truth, display only</small></h4>
+          <svg id="schart2" viewBox="0 0 360 110" role="img" aria-label="mIoU of the best pose"></svg>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="tbtn primary" id="splay" type="button">Play</button>
+        <input type="range" id="sslider" min="0" max="25" value="0" aria-label="Generation">
+      </div>
+      <div class="vfoot"><span id="sinfo"></span><span class="stat" id="sstat"></span></div>
+    </div>
+    <p class="cap">The real Table 2 search: CMA-ES with population 12, two restarts, 312 queries. Confidence and mIoU need not agree at every step, which is why the final choice keeps the most confident pose over all queries.</p>
+  </div>
+</section>
+
+<section id="landscape">
+  <div class="wrap">
+    <div class="kicker">Why global search</div>
+    <h2>Confidence knows the pose, but the landscape is bumpy</h2>
+    <p class="lead">Slide to rotate the misoriented shape back about its corruption axis. The model's confidence peaks at the upright pose, so it is a usable label-free objective, yet it has many local maxima where gradient ascent would stop.</p>
+    <div class="card">
+      <div class="chips" id="lchips" role="group" aria-label="Choose a shape for the landscape"></div>
+      <div class="split2">
+        <div class="panel"><canvas id="lshape"></canvas><div class="ptitle">Shape at the slider angle<small>parts predicted by the frozen model</small></div><div class="score" id="lmiou"></div></div>
+        <div class="chartbox">
+          <h4>Confidence \(J\) along the rotation <small>· what CanDO sees</small></h4>
+          <svg id="lchart1" viewBox="0 0 520 190" role="img" aria-label="Confidence landscape"></svg>
+          <h4>True mIoU <small>· ground truth, display only</small></h4>
+          <svg id="lchart2" viewBox="0 0 520 130" role="img" aria-label="mIoU along the rotation"></svg>
+        </div>
+      </div>
+      <div class="controls">
+        <span class="stat" style="min-width:52px" id="lphi">0°</span>
+        <input type="range" id="lslider" min="0" max="119" value="0" aria-label="Rotation angle">
+      </div>
+      <div class="vfoot"><span id="linfo"></span><span class="stat" id="lstat"></span></div>
+    </div>
+    <p class="cap">A one-dimensional slice of SO(3) for illustration; CanDO searches all three dimensions. Across shapes and poses the pooled correlation between confidence and accuracy is 0.51. Click the chart to jump to an angle.</p>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <div class="kicker">Results</div>
+    <h2>Recovery across tasks and backbones</h2>
+    <p class="lead">Full test sets, mean over three corruption seeds. “Gap closed” is the share of the distance from the corrupted model to a supervised oracle that CanDO recovers.</p>
+    <div class="keyrow"><span><i style="background:var(--corrupt)"></i>Corrupted</span><span><i style="background:var(--accent)"></i>CanDO</span><span><i style="background:var(--oracle)"></i>Oracle</span><span>· frozen PointNet++</span></div>
+    <div class="bars" id="bars"></div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Benchmark</th><th>Shift</th><th>Backbone</th><th>Corrupted</th><th>CanDO</th><th>Oracle</th><th>Gap closed</th></tr></thead>
+        <tbody id="t1"></tbody>
+      </table>
+    </div>
+    <p class="cap">mIoU for ShapeNetPart and S3DIS, accuracy for ModelNet40.</p>
+
+    <h3 class="sub">Beating every forward-only baseline</h3>
+    <p class="lead" style="margin-bottom:16px">Parameter-space test-time adaptation cannot undo a pose change, principal axes are ambiguous, and even white-box gradient ascent on the rotation gets trapped in the bumpy landscape above.</p>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Method</th><th>Gradient</th><th>Update</th><th>Label</th><th>ShapeNetPart</th><th>S3DIS</th><th>ModelNet40</th></tr></thead>
+        <tbody id="t2"></tbody>
+      </table>
+    </div>
+    <p class="cap">SO(3) rotations on ShapeNetPart and ModelNet40, tilt on S3DIS; PointNet++. ✓ marks access the method requires. “N/A”: the external classifier provides no pose prior for scene blocks and coincides with the task model on ModelNet40.</p>
+  </div>
+</section>
+
+<section id="analysis">
+  <div class="wrap">
+    <div class="kicker">Analysis</div>
+    <h2>When does confidence-only recovery work?</h2>
+    <p class="lead">The paper identifies three conditions, and is candid about where they break.</p>
+    <div class="conds">
+      <div class="cond"><div class="big">0.31 → 0.53 <small>S3DIS mIoU under tilt</small></div><h3>An augmentation gap</h3>
+        <p>Recovery is possible only for shifts the model was not trained to absorb. A scene model trained with yaw augmentation collapses under tilt, and CanDO restores it; controlled augmentation ablations confirm the causal link.</p></div>
+      <div class="cond"><div class="big">r = 0.51 <small>confidence vs. accuracy</small></div><h3>An aligned surrogate</h3>
+        <p>Dense per-point confidence tracks segmentation quality well. A single classification softmax is a weaker signal, so classification recovers a smaller share of the gap (29 to 42%).</p></div>
+      <div class="cond"><div class="big">2× <small>global vs. local search</small></div><h3>Global search</h3>
+        <p>On the bumpy landscape, local and gradient methods stall at 17 to 27% of the oracle gap, while random search, CMA-ES, and Bayesian optimization reach 53 to 57%.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="code">
+  <div class="wrap narrow">
+    <div class="kicker">Code</div>
+    <h2>Use it on your own model</h2>
+    <p class="lead">The <code>cando</code> package depends only on PyTorch, NumPy, and pycma. Your model stays a black box.</p>
+    <div class="codehead"><span>Install</span><button class="copy" data-copy="pip">Copy</button></div>
+<pre id="pip">pip install git+https://github.com/shpark97/CanDO.git</pre>
+    <div class="codehead"><span>Canonicalize one input</span><button class="copy" data-copy="usage">Copy</button></div>
+<pre id="usage"><span class="k">from</span> cando <span class="k">import</span> cando, max_prob_confidence, rotate
+
+<span class="k">def</span> objective(Rs):                                  <span class="c"># (M, 3, 3) candidate rotations</span>
+    probs = frozen_model(rotate(points, Rs))        <span class="c"># one forward query per candidate</span>
+    <span class="k">return</span> max_prob_confidence(probs)               <span class="c"># (M,) confidence</span>
+
+R, theta, info = cando(objective, budget=300)
+prediction = frozen_model(rotate(points, R)[None])</pre>
+    <p class="cap">Scripts for every table in the paper are in the <a href="https://github.com/shpark97/CanDO">repository</a>.</p>
+  </div>
+</section>
+
+<section id="bibtex">
+  <div class="wrap narrow">
+    <div class="kicker">Citation</div>
+    <h2>BibTeX</h2>
+    <div class="codehead"><span></span><button class="copy" data-copy="bib">Copy</button></div>
+<pre id="bib">@inproceedings{park2027cando,
+  title     = {Recovering Black-Box Point Cloud Models from Pose Shifts via Derivative-Free Optimization},
+  author    = {Park, Seonghwan and Park, Min-Gyu},
+  booktitle = {Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
+  year      = {2027}
+}</pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">CanDO · WACV 2027 · Built on <a href="https://github.com/yanx27/Pointnet_Pointnet2_pytorch">PointNet++</a>, <a href="https://github.com/guochengqian/PointNeXt">PointNeXt</a>, and <a href="https://github.com/CMA-ES/pycma">pycma</a>.</div>
+</footer>
+
+<script>
+/* ================= helpers ================= */
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const PALETTE = ["#1f77b4", "#d62728", "#17becf", "#e377c2", "#8c564b", "#ff7f0e"];  // matches the paper figures
+const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function rod(v) {                                   // axis-angle -> 3x3 rotation (row-major array of 9)
+  const t = Math.hypot(v[0], v[1], v[2]);
+  if (t < 1e-9) return [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  const x = v[0] / t, y = v[1] / t, z = v[2] / t, c = Math.cos(t), s = Math.sin(t), C = 1 - c;
+  return [c + x * x * C, x * y * C - z * s, x * z * C + y * s,
+          y * x * C + z * s, c + y * y * C, y * z * C - x * s,
+          z * x * C - y * s, z * y * C + x * s, c + z * z * C];
+}
+function rotateCloud(base, R) {                     // base Float32Array (n*3), p' = R p
+  const out = new Float32Array(base.length);
+  for (let i = 0; i < base.length; i += 3) {
+    const x = base[i], y = base[i + 1], z = base[i + 2];
+    out[i] = R[0] * x + R[1] * y + R[2] * z; out[i + 1] = R[3] * x + R[4] * y + R[5] * z; out[i + 2] = R[6] * x + R[7] * y + R[8] * z;
+  }
+  return out;
+}
+function normalize(ints) {                          // quantized ints -> centered, unit-radius Float32Array
+  const n = ints.length / 3, out = new Float32Array(ints.length); let cx = 0, cy = 0, cz = 0, r = 0;
+  for (let i = 0; i < n; i++) { cx += ints[3 * i]; cy += ints[3 * i + 1]; cz += ints[3 * i + 2]; }
+  cx /= n; cy /= n; cz /= n;
+  for (let i = 0; i < n; i++) {
+    out[3 * i] = ints[3 * i] - cx; out[3 * i + 1] = ints[3 * i + 1] - cy; out[3 * i + 2] = ints[3 * i + 2] - cz;
+    r = Math.max(r, Math.hypot(out[3 * i], out[3 * i + 1], out[3 * i + 2]));
+  }
+  for (let i = 0; i < out.length; i++) out[i] /= r;
+  return out;
+}
+function fitCanvas(cv) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth;
+  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(w * dpr); }
+}
+
+/* A camera shared by several canvases: drag to orbit, optional idle spin. */
+class Camera {
+  constructor(yaw = 0.6, pitch = -0.35) { this.yaw = yaw; this.pitch = pitch; this.home = [yaw, pitch]; this.views = []; this.dragging = false; this.spin = true; this.onscreen = new Set(); }
+  attach(cv, draw) {
+    this.views.push(draw); let last = null;
+    new IntersectionObserver(es => es.forEach(e => (e.isIntersecting ? this.onscreen.add(cv) : this.onscreen.delete(cv)))).observe(cv);
+    cv.addEventListener("pointerdown", e => { this.dragging = true; last = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener("pointermove", e => {
+      if (!this.dragging) return;
+      this.yaw += (e.clientX - last[0]) * 0.01; this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch + (e.clientY - last[1]) * 0.01));
+      last = [e.clientX, e.clientY]; this.draw();
+    });
+    ["pointerup", "pointercancel"].forEach(t => cv.addEventListener(t, () => (this.dragging = false)));
+  }
+  draw() { this.views.forEach(f => f()); }
+  reset() { [this.yaw, this.pitch] = this.home; this.draw(); }
+  project(x, y, z) {
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+    const x1 = cy * x + sy * z, z1 = -sy * x + cy * z;
+    return [x1, cp * y - sp * z1, sp * y + cp * z1];
+  }
+}
+
+/* Depth-sorted, depth-faded point rendering on a 2D canvas. part(i) gives the color index of point i. */
+function drawCloud(cv, cam, xyz, part) {
+  if (!xyz) return;
+  fitCanvas(cv);
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, n = xyz.length / 3, bg = rgb(css("--canvas-bg") || "#ffffff");
+  ctx.clearRect(0, 0, W, H);
+  const px = new Float32Array(n), py = new Float32Array(n), pz = new Float32Array(n), order = new Uint32Array(n);
+  for (let i = 0; i < n; i++) { const p = cam.project(xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]); px[i] = p[0]; py[i] = p[1]; pz[i] = p[2]; order[i] = i; }
+  order.sort((a, b) => pz[a] - pz[b]);
+  const S = W * 0.36, rad = Math.max(1.2, W / 250), cols = PALETTE.map(rgb);
+  for (let k = 0; k < n; k++) {
+    const i = order[k], c = cols[part(i) % cols.length], f = 0.55 + 0.45 * (pz[i] + 1) / 2;
+    ctx.fillStyle = `rgb(${bg[0] + (c[0] - bg[0]) * f | 0},${bg[1] + (c[1] - bg[1]) * f | 0},${bg[2] + (c[2] - bg[2]) * f | 0})`;
+    ctx.beginPath(); ctx.arc(W / 2 + px[i] * S, H * 0.54 - py[i] * S, rad, 0, 6.2832); ctx.fill();
+  }
+}
+
+/* Small SVG line/scatter charts. */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function axes(svg, W, H, pad, x0, x1, y0, y1, xticks, yticks, fmtX, fmtY) {
+  svg.innerHTML = "";
+  const sx = v => pad.l + (v - x0) / (x1 - x0) * (W - pad.l - pad.r), sy = v => H - pad.b - (v - y0) / (y1 - y0) * (H - pad.t - pad.b);
+  yticks.forEach(v => { el("line", { x1: pad.l, x2: W - pad.r, y1: sy(v), y2: sy(v), stroke: css("--line") }, svg);
+    el("text", { x: pad.l - 6, y: sy(v) + 4, "text-anchor": "end" }, svg).textContent = fmtY(v); });
+  xticks.forEach(v => { el("text", { x: sx(v), y: H - pad.b + 15, "text-anchor": "middle" }, svg).textContent = fmtX(v); });
+  return [sx, sy];
+}
+const path = pts => pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+function niceRange(vals, padFrac = 0.08) { let lo = Math.min(...vals), hi = Math.max(...vals); const d = (hi - lo) || 1; return [lo - d * padFrac, hi + d * padFrac]; }
+function ticks(lo, hi, n = 3) { const out = []; for (let i = 0; i <= n; i++) out.push(lo + (hi - lo) * i / n); return out; }
+
+/* ================= theme ================= */
+const redrawAll = [];
+(function () {
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("cando-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  $("theme").addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("cando-theme", root.dataset.theme); } catch (e) {}
+    redrawAll.forEach(f => f());
+  });
+})();
+
+/* ================= 1. interactive results ================= */
+const demoCam = new Camera(); const demoCv = [0, 1, 2].map(i => $("c" + i)); let demoClouds = [], shapes = [];
+demoCv.forEach((cv, j) => demoCam.attach(cv, () => demoClouds[j] && drawCloud(cv, demoCam, demoClouds[j].xyz, i => demoClouds[j].part[i])));
+function selectDemo(k) {
+  const s = shapes[k];
+  demoClouds = [s.input, s.cando, s.target].map(e => ({ xyz: normalize(e.xyz), part: e.part }));
+  $("s0").textContent = "mIoU " + s.miou_source.toFixed(2); $("s1").textContent = "mIoU " + s.miou_cando.toFixed(2);
+  $("vinfo").textContent = `${s.category} · input rotated by ${s.angle_deg.toFixed(0)}° about a random axis · ${s.parts} parts`;
+  document.querySelectorAll("#chips .chip").forEach((c, j) => c.setAttribute("aria-pressed", j === k));
+  demoCam.draw();
+}
+$("spin").addEventListener("click", e => { demoCam.spin = !demoCam.spin; e.target.textContent = demoCam.spin ? "Pause rotation" : "Resume rotation"; });
+$("reset").addEventListener("click", () => demoCam.reset());
+redrawAll.push(() => demoCam.draw());
+
+/* ================= 2. watch the search ================= */
+const ballCam = new Camera(0.5, -0.4), sShapeCam = new Camera(0.6, -0.35);
+let ex = [], sEx = null, sGen = 0, sTimer = null;
+function wrapTheta(t) {                              // equivalent axis-angle with angle in [0, pi]
+  let a = Math.hypot(t[0], t[1], t[2]); if (a < 1e-9) return [0, 0, 0];
+  let b = ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  return [t[0] / a * b, t[1] / a * b, t[2] / a * b];
+}
+function drawBall() {
+  const cv = $("sball"); if (!sEx) return; fitCanvas(cv);
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, S = W * 0.33, cx = W / 2, cy = H * 0.47, dpr = W / cv.clientWidth;
+  ctx.clearRect(0, 0, W, H);
+  const P = (x, y, z) => { const p = ballCam.project(x, y, z); return [cx + p[0] * S, cy - p[1] * S, p[2]]; };
+  ctx.lineWidth = 1 * dpr; ctx.strokeStyle = css("--line");
+  ctx.beginPath(); ctx.arc(cx, cy, S, 0, 6.2832); ctx.stroke();
+  [[1, 0, 0], [0, 1, 0], [0, 0, 1]].forEach(ax => {               // three great circles
+    ctx.beginPath();
+    for (let k = 0; k <= 64; k++) {
+      const a = k / 64 * 6.2832, u = Math.cos(a), v = Math.sin(a);
+      const p = ax[0] ? P(0, u, v) : ax[1] ? P(u, 0, v) : P(u, v, 0);
+      k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+    }
+    ctx.stroke();
+  });
+  const cands = sEx.search.cands, lo = sEx.cmin, hi = sEx.cmax, acc = rgb(css("--accent")), faint = rgb(css("--faint")), bg = rgb(css("--canvas-bg"));
+  const pts = [];
+  for (const c of cands) {
+    if (c[4] > sGen) continue;
+    const w = wrapTheta(c), p = P(w[0] / Math.PI, w[1] / Math.PI, w[2] / Math.PI), cur = c[4] === sGen;
+    pts.push([p, cur, (c[3] - lo) / (hi - lo)]);
+  }
+  pts.sort((a, b) => a[0][2] - b[0][2]);
+  for (const [p, cur, q] of pts) {
+    const f = cur ? 0.35 + 0.65 * q : 0.25 + 0.25 * q, base = cur ? acc : faint;
+    ctx.fillStyle = `rgb(${bg[0] + (base[0] - bg[0]) * f | 0},${bg[1] + (base[1] - bg[1]) * f | 0},${bg[2] + (base[2] - bg[2]) * f | 0})`;
+    ctx.beginPath(); ctx.arc(p[0], p[1], (cur ? 4.2 : 2.4) * dpr, 0, 6.2832); ctx.fill();
+  }
+  const tgt = wrapTheta(sEx.axis.map(a => -a * sEx.angle_deg * Math.PI / 180)), tp = P(tgt[0] / Math.PI, tgt[1] / Math.PI, tgt[2] / Math.PI);
+  ctx.strokeStyle = css("--warn"); ctx.lineWidth = 2.2 * dpr; ctx.beginPath(); ctx.arc(tp[0], tp[1], 8 * dpr, 0, 6.2832); ctx.stroke();
+  const b = wrapTheta(sEx.search.gens[sGen].best_theta), bp = P(b[0] / Math.PI, b[1] / Math.PI, b[2] / Math.PI);
+  ctx.strokeStyle = css("--text"); ctx.lineWidth = 1.6 * dpr;
+  ctx.beginPath(); ctx.moveTo(bp[0] - 6 * dpr, bp[1]); ctx.lineTo(bp[0] + 6 * dpr, bp[1]); ctx.moveTo(bp[0], bp[1] - 6 * dpr); ctx.lineTo(bp[0], bp[1] + 6 * dpr); ctx.stroke();
+}
+function drawSearchShape() {
+  if (!sEx) return;
+  const g = sEx.search.gens[sGen];
+  if (sEx.cacheKey !== sGen) { sEx.cache = rotateCloud(sEx.base, rod(g.best_theta)); sEx.cacheKey = sGen; }
+  drawCloud($("sshape"), sShapeCam, sEx.cache, i => g.parts.charCodeAt(i) - 48);
+}
+function drawSearchCharts() {
+  if (!sEx) return;
+  const cands = sEx.search.cands, gens = sEx.search.gens, Q = cands.length, now = gens[sGen].queries;
+  const [lo, hi] = niceRange(cands.map(c => c[3]));
+  let svg = $("schart1"); const pad = { l: 38, r: 8, t: 8, b: 20 };
+  let [sx, sy] = axes(svg, 360, 150, pad, 0, Q, lo, hi, [0, 100, 200, 300], ticks(lo, hi, 3), v => v, v => v.toFixed(2));
+  el("rect", { x: sx(now), y: pad.t, width: Math.max(0, sx(Q) - sx(now)), height: 150 - pad.t - pad.b, fill: css("--canvas-bg"), opacity: 0.75 }, svg);
+  cands.forEach((c, i) => el("circle", { cx: sx(i + 1), cy: sy(c[3]), r: 1.7, fill: i < now ? css("--accent") : css("--line"), opacity: i < now ? 0.55 : 0.6 }, svg));
+  const best = gens.slice(0, sGen + 1).map(g => [sx(g.queries), sy(g.best_conf)]);
+  el("path", { d: path([[sx(1), best[0][1]], ...best]), fill: "none", stroke: css("--accent-ink"), "stroke-width": 2 }, svg);
+  svg = $("schart2"); const pad2 = { l: 38, r: 8, t: 8, b: 20 };
+  [sx, sy] = axes(svg, 360, 110, pad2, 0, Q, 0, 1, [0, 100, 200, 300], [0, 0.5, 1], v => v, v => v.toFixed(1));
+  const m = gens.slice(0, sGen + 1).map(g => [sx(g.queries), sy(g.miou)]);
+  const stepped = []; m.forEach((p, i) => { if (i) stepped.push([p[0], m[i - 1][1]]); stepped.push(p); });
+  el("path", { d: path(stepped), fill: "none", stroke: css("--text"), "stroke-width": 1.8 }, svg);
+  el("circle", { cx: m[m.length - 1][0], cy: m[m.length - 1][1], r: 3.5, fill: css("--text") }, svg);
+}
+function renderSearch() {
+  const g = sEx.search.gens[sGen];
+  $("sslider").value = sGen;
+  $("smiou").textContent = "mIoU " + g.miou.toFixed(2);
+  $("smiou").className = "score " + (g.miou >= 0.75 ? "good" : g.miou < 0.5 ? "bad" : "");
+  $("sinfo").innerHTML = `${sEx.category} · rotated ${sEx.angle_deg.toFixed(0)}° · restart ${g.restart + 1} of 2`;
+  $("sstat").innerHTML = `generation <b>${sGen + 1}</b>/${sEx.search.gens.length} · <b>${g.queries}</b> queries · best confidence <b>${g.best_conf.toFixed(3)}</b>`;
+  drawBall(); drawSearchShape(); drawSearchCharts();
+}
+function selectSearch(k) {
+  sEx = ex[k];
+  if (!sEx.base) {
+    sEx.base = normalize(sEx.xyz);
+    const cs = sEx.search.cands.map(c => c[3]); sEx.cmin = Math.min(...cs); sEx.cmax = Math.max(...cs);
+  }
+  $("sslider").max = sEx.search.gens.length - 1; sGen = 0; stopSearch();
+  document.querySelectorAll("#schips .chip").forEach((c, j) => c.setAttribute("aria-pressed", j === k));
+  renderSearch();
+}
+function stopSearch() { clearInterval(sTimer); sTimer = null; $("splay").textContent = "Play"; }
+function playSearch() {
+  if (sGen >= sEx.search.gens.length - 1) sGen = 0;
+  $("splay").textContent = "Pause";
+  sTimer = setInterval(() => { if (sGen >= sEx.search.gens.length - 1) return stopSearch(); sGen++; renderSearch(); }, 450);
+}
+$("splay").addEventListener("click", () => (sTimer ? stopSearch() : playSearch()));
+$("sslider").addEventListener("input", e => { stopSearch(); sGen = +e.target.value; renderSearch(); });
+ballCam.attach($("sball"), drawBall); sShapeCam.attach($("sshape"), drawSearchShape);
+redrawAll.push(() => sEx && renderSearch());
+
+/* ================= 3. confidence landscape ================= */
+const lCam = new Camera(0.6, -0.35); let lEx = null, lIdx = 0;
+function drawLandscapeShape() {
+  if (!lEx) return;
+  const phi = lEx.landscape.phi_deg[lIdx] * Math.PI / 180, parts = lEx.landscape.parts[lIdx];
+  if (lEx.lKey !== lIdx) { lEx.lCache = rotateCloud(lEx.base, rod(lEx.axis.map(a => -a * phi))); lEx.lKey = lIdx; }
+  drawCloud($("lshape"), lCam, lEx.lCache, i => parts.charCodeAt(i) - 48);
+}
+function drawLandscapeCharts() {
+  if (!lEx) return;
+  const L = lEx.landscape, n = L.conf.length, phi = L.phi_deg, k = L.conf.indexOf(Math.max(...L.conf));
+  const [lo, hi] = niceRange(L.conf);
+  const pad = { l: 40, r: 10, t: 14, b: 20 };
+  let svg = $("lchart1");
+  let [sx, sy] = axes(svg, 520, 190, pad, 0, 360, lo, hi, [0, 90, 180, 270, 360], ticks(lo, hi, 3), v => v + "°", v => v.toFixed(2));
+  const pts = L.conf.map((c, i) => [sx(phi[i]), sy(c)]);
+  el("path", { d: path(pts) + `L${sx(phi[n - 1]).toFixed(1)} ${sy(lo)} L${sx(0)} ${sy(lo)} Z`, fill: css("--accent"), opacity: 0.1 }, svg);
+  el("path", { d: path(pts), fill: "none", stroke: css("--accent"), "stroke-width": 2 }, svg);
+  for (let i = 0; i < n; i++) {                                   // local maxima: where gradient ascent stops
+    if (L.conf[i] > L.conf[(i - 1 + n) % n] && L.conf[i] >= L.conf[(i + 1) % n] && i !== k)
+      el("circle", { cx: sx(phi[i]), cy: sy(L.conf[i]), r: 2.6, fill: css("--canvas-bg"), stroke: css("--muted"), "stroke-width": 1.2 }, svg);
+  }
+  const up = sx(lEx.angle_deg);
+  el("line", { x1: up, x2: up, y1: pad.t, y2: 190 - pad.b, stroke: css("--warn"), "stroke-dasharray": "4 3", "stroke-width": 1.4 }, svg);
+  el("text", { x: up + 4, y: pad.t + 2, fill: css("--warn") }, svg).textContent = "upright";
+  el("circle", { cx: sx(phi[k]), cy: sy(L.conf[k]), r: 4.5, fill: css("--accent") }, svg);
+  const cur = sx(phi[lIdx]);
+  el("line", { x1: cur, x2: cur, y1: pad.t, y2: 190 - pad.b, stroke: css("--text"), "stroke-width": 1.4 }, svg);
+  el("circle", { cx: cur, cy: sy(L.conf[lIdx]), r: 4, fill: css("--text") }, svg);
+  svg = $("lchart2");
+  [sx, sy] = axes(svg, 520, 130, { l: 40, r: 10, t: 8, b: 20 }, 0, 360, 0, 1, [0, 90, 180, 270, 360], [0, 0.5, 1], v => v + "°", v => v.toFixed(1));
+  el("path", { d: path(L.miou.map((m, i) => [sx(phi[i]), sy(m)])), fill: "none", stroke: css("--muted"), "stroke-width": 1.6 }, svg);
+  el("line", { x1: up, x2: up, y1: 8, y2: 110, stroke: css("--warn"), "stroke-dasharray": "4 3", "stroke-width": 1.4 }, svg);
+  el("line", { x1: cur, x2: cur, y1: 8, y2: 110, stroke: css("--text"), "stroke-width": 1.4 }, svg);
+  el("circle", { cx: cur, cy: sy(L.miou[lIdx]), r: 4, fill: css("--text") }, svg);
+}
+function renderLandscape() {
+  const L = lEx.landscape, m = L.miou[lIdx], n = L.conf.length;
+  let peaks = 0; for (let i = 0; i < n; i++) if (L.conf[i] > L.conf[(i - 1 + n) % n] && L.conf[i] >= L.conf[(i + 1) % n]) peaks++;
+  $("lslider").value = lIdx; $("lphi").textContent = L.phi_deg[lIdx].toFixed(0) + "°";
+  $("lmiou").textContent = "mIoU " + m.toFixed(2); $("lmiou").className = "score " + (m >= 0.75 ? "good" : m < 0.5 ? "bad" : "");
+  $("linfo").textContent = `${lEx.category} · corrupted by ${lEx.angle_deg.toFixed(0)}°, so ${lEx.angle_deg.toFixed(0)}° on the slider is upright · ${peaks} local maxima`;
+  $("lstat").innerHTML = `confidence <b>${L.conf[lIdx].toFixed(3)}</b>`;
+  drawLandscapeShape(); drawLandscapeCharts();
+}
+function selectLandscape(k) {
+  lEx = ex[k]; if (!lEx.base) lEx.base = normalize(lEx.xyz);
+  lIdx = 0; document.querySelectorAll("#lchips .chip").forEach((c, j) => c.setAttribute("aria-pressed", j === k));
+  renderLandscape();
+}
+$("lslider").addEventListener("input", e => { lIdx = +e.target.value; renderLandscape(); });
+["lchart1", "lchart2"].forEach(id => $(id).addEventListener("click", e => {
+  const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 520;
+  const phi = Math.max(0, Math.min(359, (x - 40) / (520 - 50) * 360)); lIdx = Math.round(phi / 3) % lEx.landscape.conf.length; renderLandscape();
+}));
+lCam.attach($("lshape"), drawLandscapeShape);
+redrawAll.push(() => lEx && renderLandscape());
+
+/* ================= idle spin for all 3D views ================= */
+function tick() {
+  [[demoCam, 0.006], [ballCam, 0.004], [sShapeCam, 0.005], [lCam, 0.005]].forEach(([c, d]) => {
+    if (c.spin && !c.dragging && !reduceMotion && c.onscreen.size) { c.yaw += d; c.draw(); }
+  });
+  requestAnimationFrame(tick);
+}
+if (reduceMotion) { demoCam.spin = false; $("spin").textContent = "Resume rotation"; }
+window.addEventListener("resize", () => redrawAll.forEach(f => f()));
+
+/* ================= results ================= */
+const T1 = [
+  ["ShapeNetPart", "Azimuth", "PointNet++",  "0.387 ± 0.005", "0.752 ± 0.002", "0.869 ± 0.000", 76],
+  ["",             "",        "PointNeXt-S", "0.396 ± 0.005", "0.718 ± 0.003", "0.871 ± 0.000", 68],
+  ["",             "SO(3)",   "PointNet++",  "0.352 ± 0.001", "0.602 ± 0.003", "0.845 ± 0.001", 51],
+  ["",             "",        "PointNeXt-S", "0.372 ± 0.002", "0.637 ± 0.003", "0.843 ± 0.001", 56],
+  ["S3DIS",        "Tilt",    "PointNet++",  "0.305 ± 0.005", "0.528 ± 0.046", "0.735 ± 0.023", 52],
+  ["",             "",        "PointNeXt-S", "0.249 ± 0.013", "0.599 ± 0.050", "0.756 ± 0.025", 69],
+  ["ModelNet40",   "SO(3)",   "PointNet++",  "0.125 ± 0.005", "0.340 ± 0.007", "0.861 ± 0.003", 29],
+  ["",             "",        "PointNeXt-S", "0.160 ± 0.004", "0.480 ± 0.004", "0.920 ± 0.001", 42],
+];
+$("t1").innerHTML = T1.map(r =>
+  `<tr class="${r[0] && r[0] !== "ShapeNetPart" ? "group" : ""}"><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td>` +
+  `<td><b>${r[4]}</b></td><td>${r[5]}</td><td><div class="gapcell"><div class="bar"><i style="width:${r[6]}%"></i></div><b>${r[6]}%</b></div></td></tr>`).join("");
+const BARS = [["ShapeNetPart", "Azimuth · mIoU", 0.387, 0.752, 0.869, 76], ["ShapeNetPart", "SO(3) · mIoU", 0.352, 0.602, 0.845, 51],
+              ["S3DIS", "Tilt · mIoU", 0.305, 0.528, 0.735, 52], ["ModelNet40", "SO(3) · accuracy", 0.125, 0.340, 0.861, 29]];
+$("bars").innerHTML = BARS.map(b => `<div class="bargroup"><h4>${b[0]}<small>${b[1]}</small></h4><div class="bgplot">` +
+  [["bc", b[2]], ["bo", b[3]], ["br", b[4]]].map(([c, v]) => `<div class="${c}" data-h="${v * 100}%"><span>${v.toFixed(2)}</span></div>`).join("") +
+  `</div><div class="bgfoot"><span>gap closed</span><b>${b[5]}%</b></div></div>`).join("");
+new IntersectionObserver((es, ob) => es.forEach(e => { if (e.isIntersecting) { e.target.querySelectorAll(".bgplot div").forEach(d => (d.style.height = d.dataset.h)); ob.disconnect(); } }),
+  { threshold: 0.3 }).observe($("bars"));
+
+const Y = '<span class="mark y">✓</span>', N = '<span class="mark n">✗</span>';
+const T2 = [
+  ["Source (no adaptation)", N, N, N, "0.351", "0.338", "0.128"],
+  ["PCA canonicalization", N, N, N, "0.237", "0.047", "0.221"],
+  ["PCA + confidence", N, N, N, "0.293", "0.047", "0.260"],
+  ["External prior (classifier)", N, N, N, "0.359", "N/A", "N/A"],
+  ["DUA", N, Y, N, "0.356", "0.357", "0.118"],
+  ["TENT", Y, Y, N, "0.353", "0.353", "0.123"],
+  ["MEMO", Y, Y, N, "0.354", "0.357", "0.126"],
+  ["Gradient-based canonicalization", Y, N, N, "0.500", "0.440", "0.149"],
+  ["CanDO (ours)", N, N, N, "0.606", "0.523", "0.354", "ours"],
+  ["Oracle (ground truth)", N, N, Y, "0.845", "0.752", "0.861", "oracle"],
+];
+$("t2").innerHTML = T2.map(r => `<tr class="${r[7] || ""}${r[7] === "oracle" ? " group" : ""}">` + r.slice(0, 7).map(c => `<td>${c}</td>`).join("") + "</tr>").join("");
+
+/* ================= misc ================= */
+document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($(b.dataset.copy).innerText); b.textContent = "Copied"; }
+  catch (e) { b.textContent = "Select and copy"; }
+  setTimeout(() => (b.textContent = "Copy"), 1500);
+}));
+window.addEventListener("load", () => {
+  if (window.renderMathInElement) renderMathInElement(document.body, {
+    delimiters: [{ left: "$$", right: "$$", display: true }, { left: "\\(", right: "\\)", display: false }] });
+});
+function chips(id, items, onSelect) {
+  $(id).innerHTML = items.map(s => `<button class="chip" type="button" aria-pressed="false">${s.category}</button>`).join("");
+  $(id).querySelectorAll(".chip").forEach((c, k) => c.addEventListener("click", () => onSelect(k)));
+}
+const fail = msg => e => { console.error(e); $(msg).textContent = "Could not load the examples (open the page through a web server, not as a local file)."; };
+fetch("static/data/shapes.json").then(r => r.json()).then(d => { shapes = d.shapes; chips("chips", shapes, selectDemo); selectDemo(0); }).catch(fail("vinfo"));
+fetch("static/data/explore.json").then(r => r.json()).then(d => {
+  ex = d.examples; chips("schips", ex, selectSearch); chips("lchips", ex, selectLandscape);
+  selectSearch(0); selectLandscape(Math.min(1, ex.length - 1));
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !sTimer && sGen === 0) { playSearch(); io.disconnect(); } }), { threshold: 0.5 });
+  if (!reduceMotion) io.observe($("search"));
+}).catch(fail("sinfo"));
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

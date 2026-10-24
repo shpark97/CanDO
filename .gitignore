@@ -1,0 +1,27 @@
+# data, results, checkpoints (downloaded or produced locally; see README)
+datasets/
+runs/
+outputs/
+pretrained/
+third_party/
+*.pth
+*.pt
+*.ckpt
+*.npz
+*.zip
+*.tar
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+
+# editor / os
+.vscode/
+.idea/
+.DS_Store

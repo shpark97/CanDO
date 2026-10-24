@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cando"
+version = "1.0.0"
+description = "Test-time canonicalization of black-box point cloud models via derivative-free optimization (WACV 2027)"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{ name = "Seonghwan Park" }, { name = "Min-Gyu Park" }]
+dependencies = ["torch>=1.13", "numpy", "cma"]
+
+[project.urls]
+Homepage = "https://shpark97.github.io/CanDO/"
+Repository = "https://github.com/shpark97/CanDO"
+
+[tool.setuptools]
+packages = ["cando"]

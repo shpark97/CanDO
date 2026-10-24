@@ -1,0 +1,15 @@
+# Tested with Python 3.10, PyTorch 2.4.1 + CUDA 12.1 (install torch first, see README).
+numpy==1.26.4
+scipy
+scikit-learn
+pandas
+matplotlib
+cma
+h5py
+tqdm
+# openpoints (PointNeXt backbones)
+easydict
+multimethod
+termcolor
+shortuuid
+pyyaml

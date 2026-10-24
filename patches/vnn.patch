@@ -1,0 +1,51 @@
+diff --git a/train_cls.py b/train_cls.py
+index 9a62a1b..04d3333 100644
+--- a/train_cls.py
++++ b/train_cls.py
+@@ -16,7 +16,10 @@ import sys
+ import provider
+ import importlib
+ import shutil
+-from pytorch3d.transforms import RotateAxisAngle, Rotate, random_rotations
++try:  # pytorch3d only needed for --rot z/so3; aligned training does not require it
++    from pytorch3d.transforms import RotateAxisAngle, Rotate, random_rotations
++except ModuleNotFoundError:
++    RotateAxisAngle = Rotate = random_rotations = None
+ 
+ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ ROOT_DIR = BASE_DIR
+diff --git a/train_partseg.py b/train_partseg.py
+index 2c985be..33561eb 100644
+--- a/train_partseg.py
++++ b/train_partseg.py
+@@ -16,7 +16,10 @@ import shutil
+ from tqdm import tqdm
+ import provider
+ import numpy as np
+-from pytorch3d.transforms import RotateAxisAngle, Rotate, random_rotations
++try:  # pytorch3d only needed for --rot z/so3; aligned training does not require it
++    from pytorch3d.transforms import RotateAxisAngle, Rotate, random_rotations
++except ModuleNotFoundError:
++    RotateAxisAngle = Rotate = random_rotations = None
+ 
+ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ ROOT_DIR = BASE_DIR
+@@ -108,6 +111,9 @@ def main(args):
+     MODEL = importlib.import_module(args.model)
+ 
+     classifier = MODEL.get_model(args, num_part, normal_channel=args.normal).cuda()
++    if torch.cuda.device_count() > 1:  # data-parallel across all visible GPUs
++        log_string('Using %d GPUs via DataParallel' % torch.cuda.device_count())
++        classifier = torch.nn.DataParallel(classifier)
+     criterion = MODEL.get_loss().cuda()
+ 
+ 
+@@ -271,7 +277,7 @@ def main(args):
+             mean_shape_ious = np.mean(list(shape_ious.values()))
+             test_metrics['accuracy'] = total_correct / float(total_seen)
+             test_metrics['class_avg_accuracy'] = np.mean(
+-                np.array(total_correct_class) / np.array(total_seen_class, dtype=np.float))
++                np.array(total_correct_class) / np.array(total_seen_class, dtype=np.float64))
+             for cat in sorted(shape_ious.keys()):
+                 log_string('eval mIoU of %s %f' % (cat + ' ' * (14 - len(cat)), shape_ious[cat]))
+             test_metrics['class_avg_iou'] = mean_shape_ious
